@@ -344,4 +344,40 @@ crsctl stat res -t
 # ora.FRA.dg    ONLINE  ONLINE       oracle                   STABLE
 ```
 
-### Installing Oracle DB 19c software Only
+## Installing Oracle DB 19c software Only
+
+- Login as `oracle` user
+- Upload the installer file `LINUX.X64_193000_db_home.zip`
+- Unzip the oracle database 19c zipped files in the home dir location `/u01/19c/oracle_base/oracle/db_home`
+
+```bash
+cd $ORACLE_HOME
+unzip LINUX.X64_193000_db_home.zip
+```
+
+- Follow the instruction on video [Installing Oracle DB 19c Software Only](https://drive.google.com/file/d/1zNeC8CT5zKIH0DSYRpluw65_jA1Rp-vA/view?usp=sharing)
+
+## Create database using dbca
+
+- Login as `oracle` user
+- Running `dbca` for create database
+
+```bash
+dbca
+```
+
+- Follow the instruction on video [Create Database Using dbca](https://drive.google.com/file/d/1I5wx3QJw-g4yqFBTiWDSqXKIdrDXP-eU/view?usp=sharing)
+
+### Check Usage Storage On ASM
+
+- Login using `grid` user
+- Run command
+
+```bash
+asmcmd
+```
+
+## Credit
+
+[ICyb3r Youtube Channel](https://www.youtube.com/watch?v=pRJgiuT-S2M)
+[ICyb3r Github](https://github.com/icyb3r-code/DBAdmin/blob/master/Oracle/Contents/Oracle19c_with_ASM/README.md#installing-oracle-db-19c-software-only)
