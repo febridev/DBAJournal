@@ -331,6 +331,14 @@ crsctl stat res -tsqlplus -s / as sysdba <<EOFselect instance_name from v\$insta
 ## Create Data & FRA Disks Group
 
 - Login using `grid` user
+- Call Oracle ASM Configuration Assistant
+
+```bash
+su - grid
+cd $ORACLE_HOME
+asmca
+```
+
 - Follow instruction, video on below
   [Create Disks Group On ASMCA](https://drive.google.com/file/d/1-IsNhbJ97bzMyUuPGbFNNoOFQzsBsP-z/view?usp=sharing)
 
@@ -353,6 +361,7 @@ crsctl stat res -t
 ```bash
 cd $ORACLE_HOME
 unzip LINUX.X64_193000_db_home.zip
+./runInstaller
 ```
 
 - Follow the instruction on video [Installing Oracle DB 19c Software Only](https://drive.google.com/file/d/1zNeC8CT5zKIH0DSYRpluw65_jA1Rp-vA/view?usp=sharing)
@@ -363,6 +372,8 @@ unzip LINUX.X64_193000_db_home.zip
 - Running `dbca` for create database
 
 ```bash
+su - oracle
+cd $ORACLE_HOME
 dbca
 ```
 
