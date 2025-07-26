@@ -11,6 +11,8 @@ This is guide for setup innodb replication on mysql 8.4 using ubuntu 24 LTS
 ```
 - Test Ping Again
 
+
+
 ## Primary Node
 - Adjust Configurtaion `/etc/mysql/my.cnf`
 ```txt
@@ -43,8 +45,16 @@ max_connections=1000
 ```sql
 -- IF CREATE 
 -- CREATE USER 'repuser'@'%' IDENTIFIED BY 'repuser';
-GRANT BACKUP_ADMIN, GROUP_REPLICATION_ADMIN ON *.* TO 'repuser'@'%';
+GRANT ALL PRIVILEGES ON *.* TO 'repuser'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
+```
+- Validate instance configuration
+```bash
+mysqlsh --uri repuser@10.10.50.7:3306
+\js
+```
+```js
+dba.checkInstanceConfiguration()
 ```
 
 ## Second Node 
@@ -80,8 +90,17 @@ max_connections=1000
 ```sql
 -- IF CREATE 
 -- CREATE USER 'repuser'@'%' IDENTIFIED BY 'repuser';
-GRANT BACKUP_ADMIN, GROUP_REPLICATION_ADMIN ON *.* TO 'repuser'@'%';
+GRANT ALL PRIVILEGES ON *.* TO 'repuser'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
+```
+
+- Validate instance configuration
+```bash
+mysqlsh --uri repuser@10.10.50.9:3306
+\js
+```
+```js
+dba.checkInstanceConfiguration()
 ```
 
 ## Third Node
@@ -117,13 +136,23 @@ max_connections=1000
 ```sql
 -- IF CREATE 
 -- CREATE USER 'repuser'@'%' IDENTIFIED BY 'repuser';
-GRANT BACKUP_ADMIN, GROUP_REPLICATION_ADMIN ON *.* TO 'repuser'@'%';
+GRANT ALL PRIVILEGES ON *.* TO 'repuser'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
+```
+
+- Validate instance configuration
+```bash
+mysqlsh --uri repuser@10.10.50.11:3306
+\js
+```
+```js
+dba.checkInstanceConfiguration()
 ```
 
 # Setup InnoDB Replication Using `mysqlsh`
 ## Primary Node
-This primary node will be set as primary node have R/W access
+
+- This primary node will be set as primary node have R/W access
 ```bash
 mysqlsh --uri repuser@10.10.50.7:3306
 \js

@@ -108,5 +108,36 @@ select * from pg_stat_replication;
 
 # Streaming Replication Postgres-13 Ubuntu 24 LTS (Synchronus)
 ## Primary Node
+- login into database as `postgres`
+```bash
+sudo -i -u postgres
+```
+```sql
+ALTER SYSTEM SET synchronous_standby_names TO '*';
+```
+- Restart Postgresql Service
+```bash
+systemctl restart postgresql
+```
+
+- Rollback to asynchronous
+```sql
+ALTER SYSTEM RESET ALL;
+```
+
+- Restart Postgresql Service
+```bash
+systemctl restart postgresql
+```
 
 ## Standby Node
+
+
+# Check `pg_replication_slots`
+This is how to check which one pg_replication_slots
+```bash
+sudo -i -u postgres
+```
+```sql
+select * from pg_replication_slots;
+```
