@@ -103,6 +103,7 @@ source_user = '<repuser>',
 source_password = '<password>', 
 source_host = '<ip_primary>', 
 source_port = 3306,
+-- GET_SOURCE_PUBLIC_KEY =1,
 source_auto_position = 1;
 
 start replica;
