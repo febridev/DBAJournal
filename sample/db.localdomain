@@ -1,0 +1,31 @@
+$TTL    604800
+@       IN      SOA     dns-server.localdomain. root.localdomain. (
+                              2025102901 ; Serial
+                                 604800     ; Refresh
+                                  86400     ; Retry
+                                2419200     ; Expire
+                                 604800 )   ; Negative Cache TTL
+;
+@       IN      NS      dns-server.localdomain.
+dns-server  IN  A       10.10.20.18 ; IP Server DNS Ubuntu Anda
+
+; ============== Entri RAC (10.10.20.x - Public/VIP/SCAN) ==============
+
+; Public Node IPs
+nt19c4  IN      A       10.10.20.10
+nt19c5  IN      A       10.10.20.16
+
+; VIP Node IPs
+nt19c4-vip IN   A       10.10.20.103
+nt19c5-vip IN   A       10.10.20.101
+
+; SCAN Listener - Penting: Tiga A Record untuk Satu Nama (Round-Robin)
+nt19c-scan IN   A       10.10.20.111
+nt19c-scan IN   A       10.10.20.112
+nt19c-scan IN   A       10.10.20.113
+
+; ============== Entri RAC (10.10.50.x - Private Interconnect) ==============
+
+; Private Interconnect IPs
+nt19c4-priv IN  A       10.10.50.99
+nt19c5-priv IN  A       10.10.50.101

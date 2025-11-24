@@ -1,0 +1,11 @@
+$TTL    604800
+@       IN      SOA     dns-server.localdomain. root.localdomain. (
+                              2025102902 ; Serial
+                                 604800     ; Refresh
+                                  86400     ; Retry
+                                2419200     ; Expire
+                                 604800 )   ; Negative Cache TTL
+@       IN      NS      dns-server.localdomain.
+; ... Entri PTR Anda di bawah ini
+99      IN      PTR     nt19c4-priv.localdomain.
+101     IN      PTR     nt19c5-priv.localdomain.

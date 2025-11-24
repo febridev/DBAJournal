@@ -1,0 +1,19 @@
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+10.10.20.16 nt19c5.localdomain nt19c5
+10.10.20.10 nt19c4.localdomain nt19c4
+
+# priv
+10.10.50.101 nt19c5-priv.localdomain nt19c5-priv
+10.10.50.99 nt19c4-priv.localdomain nt19c4-priv
+
+# vip
+10.10.20.101 nt19c5-vip.localdomain nt19c5-vip
+10.10.20.103 nt19c4-vip.localdomain nt19c4-vip
+
+
+#scan
+#10.10.20.111 nt19c-scan.localdomain nt19c-scan
+#10.10.20.112 nt19c-scan.localdomain nt19c-scan
+#10.10.20.113 nt19c-scan.localdomain nt19c-scan

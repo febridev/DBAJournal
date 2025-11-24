@@ -16,11 +16,17 @@ udevadm info --query=property --name=/dev/sdb
 ```bash
 asmcmd lsdsk --candidate
 ```
+```bash
+sqlplus / as sysasm
+```
 
 ```sql
 SET LINESIZE 200
 COL NAME FORMAT A20
+-- CHECK CANDIDATE
+SELECT NAME, PATH, HEADER_STATUS FROM V$ASM_DISK;
 
+-- CHECK CURRENT
 SELECT
     NAME,
     STATE,

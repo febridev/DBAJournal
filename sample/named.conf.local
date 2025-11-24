@@ -1,0 +1,24 @@
+//
+// Do any local configuration here
+//
+
+// Consider adding the 1918 zones here, if they are not used in your
+// organization
+//include "/etc/bind/zones.rfc1918";
+// Forward Zone untuk Public/VIP/SCAN
+zone "localdomain" {
+    type master;
+    file "/etc/bind/db.localdomain";
+};
+
+// Reverse Zone untuk Subnet 10.10.20.x
+zone "20.10.10.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.10.10.20";
+};
+
+// Reverse Zone untuk Subnet 10.10.50.x (Jaringan Private)
+zone "50.10.10.in-addr.arpa" {
+    type master;
+    file "/etc/bind/db.10.10.50";
+};

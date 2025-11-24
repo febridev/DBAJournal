@@ -1,0 +1,69 @@
+--------------------------------------------------------------------------------
+Name           Target  State        Server                   State details       
+--------------------------------------------------------------------------------
+Local Resources
+--------------------------------------------------------------------------------
+ora.LISTENER.lsnr
+               ONLINE  ONLINE       nt19c4                   STABLE
+               ONLINE  ONLINE       nt19c5                   STABLE
+ora.chad
+               ONLINE  ONLINE       nt19c4                   STABLE
+               ONLINE  ONLINE       nt19c5                   STABLE
+ora.net1.network
+               ONLINE  ONLINE       nt19c4                   STABLE
+               ONLINE  ONLINE       nt19c5                   STABLE
+ora.ons
+               ONLINE  ONLINE       nt19c4                   STABLE
+               ONLINE  ONLINE       nt19c5                   STABLE
+--------------------------------------------------------------------------------
+Cluster Resources
+--------------------------------------------------------------------------------
+ora.ASMNET1LSNR_ASM.lsnr(ora.asmgroup)
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+      2        ONLINE  ONLINE       nt19c5                   STABLE
+ora.CRS.dg(ora.asmgroup)
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+      2        ONLINE  ONLINE       nt19c5                   STABLE
+ora.DATA.dg(ora.asmgroup)
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+      2        ONLINE  ONLINE       nt19c5                   STABLE
+ora.FRA.dg(ora.asmgroup)
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+      2        ONLINE  ONLINE       nt19c5                   STABLE
+ora.LISTENER_SCAN1.lsnr
+      1        ONLINE  ONLINE       nt19c5                   STABLE
+ora.LISTENER_SCAN2.lsnr
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+ora.LISTENER_SCAN3.lsnr
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+ora.asm(ora.asmgroup)
+      1        ONLINE  ONLINE       nt19c4                   Started,STABLE
+      2        ONLINE  ONLINE       nt19c5                   Started,STABLE
+ora.asmnet1.asmnetwork(ora.asmgroup)
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+      2        ONLINE  ONLINE       nt19c5                   STABLE
+ora.cvu
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+ora.demorh01.db
+      1        ONLINE  ONLINE       nt19c4                   Open,HOME=/u01/19c/o
+                                                             racle_base/oracle/db
+                                                             _home,STABLE
+      2        ONLINE  ONLINE       nt19c5                   Open,HOME=/u01/19c/o
+                                                             racle_base/oracle/db
+                                                             _home,STABLE
+ora.demorh01.demorh01_service.svc
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+      2        ONLINE  ONLINE       nt19c5                   STABLE
+ora.nt19c4.vip
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+ora.nt19c5.vip
+      1        ONLINE  ONLINE       nt19c5                   STABLE
+ora.qosmserver
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+ora.scan1.vip
+      1        ONLINE  ONLINE       nt19c5                   STABLE
+ora.scan2.vip
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+ora.scan3.vip
+      1        ONLINE  ONLINE       nt19c4                   STABLE
+--------------------------------------------------------------------------------
