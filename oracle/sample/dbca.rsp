@@ -230,7 +230,7 @@ templateName=/u01/19c/oracle_base/oracle/db_home/assistants/dbca/templates/Gener
 # Default value : None
 # Mandatory     : Yes
 #-----------------------------------------------------------------------------
-sysPassword=database
+sysPassword=5tgb^YHN
 
 #-----------------------------------------------------------------------------
 # Name          : systemPassword

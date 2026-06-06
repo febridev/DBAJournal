@@ -1,12 +1,19 @@
 # LINUX Partition Disk With LVM
+
 ## Requirement Binary / Package
+
+> [!NOTE]
+> Please Following Your OS
+
 - Debian/Ubuntu: `sudo apt-get install lvm2`
 - CentOS/RHEL: `sudo yum install lvm2`
 
 ## Setup
+
 - Create partition
+
 ```bash
-sudo fdisk /dev/sdd 
+sudo fdisk /dev/sdd
 
 # g new partition
 # n create partition
@@ -17,6 +24,7 @@ sudo fdisk /dev/sdd
 ```
 
 - Initiate Physical Volume (PV)
+
 ```bash
 sudo pvcreate /dev/sdd1
 
@@ -24,7 +32,8 @@ sudo pvcreate /dev/sdd1
 sudo pvs
 ```
 
-- Create Volume Group 
+- Create Volume Group
+
 ```bash
 sudo vgcreate vg-data /dev/sdd1
 
@@ -33,6 +42,7 @@ sudo vgs
 ```
 
 - Create logical volume
+
 ```bash
 sudo lvcreate -n lv-data -l 100%FREE vg-data
 # -n lv-data give lv-data pada LV
@@ -43,18 +53,21 @@ sudo lvs
 ```
 
 - Create filesystem
+
 ```bash
 sudo mkfs.xfs /dev/vg-data/lv-data
 
 # for RHEL 9 and Oracle Linux 9 is recommend using XFS
 ```
 
-- Get UUID 
+- Get UUID
+
 ```bash
 blkid /dev/vg-data/lv-data
 ```
 
-- Mounting 
+- Mounting
+
 ```bash
 mkdir /u01
 vi /etc/fstab
