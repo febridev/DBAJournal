@@ -66,6 +66,7 @@ ATTRIBUTE
 
 ```bash
 asmca -silent -configureASM -sysAsmPassword <YOUR_SYSASM_PASSWORD> -asmsnmpPassword <YOUR_ASMSNMP_PASSWORD> -diskString '/dev/oracleasm/*' -diskGroupName FRA -diskList '/dev/oracleasm/asm-fra' -redundancy EXTERNAL
+asmca -silent -createDiskGroup -sysAsmPassword <YOUR_SYSASM_PASSWORD> -asmsnmpPassword <YOUR_ASMSNMP_PASSWORD> -diskString '/dev/oracleasm/*' -diskGroupName FRA -diskList '/dev/oracleasm/asm-fra' -redundancy EXTERNAL
 ```
 
 ## Install DB Software Only Silent

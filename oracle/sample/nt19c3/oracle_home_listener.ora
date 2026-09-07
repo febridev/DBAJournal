@@ -1,0 +1,49 @@
+
+# ==========================================
+# LISTENER UTAMA (DEFAULT - PORT 1521)
+# ==========================================
+LISTENER =
+  (DESCRIPTION_LIST =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCP)(HOST = 192.168.0.217)(PORT = 1521))
+    )
+  )
+
+# KOREKSI: Mengubah nama dari SID_LIST_LISTENER_SHARED menjadi SID_LIST_LISTENER
+# agar terpetakan dengan benar ke LISTENER di atas
+SID_LIST_LISTENER =
+  (SID_LIST =
+    (SID_DESC =
+      (GLOBAL_DBNAME = AMDBT)
+      (ORACLE_HOME = /u01/19c/oracle_base/oracle/db_home)
+      (SID_NAME = AMDBT)
+    )
+    (SID_DESC =
+      (GLOBAL_DBNAME = 19UATDB)
+      (ORACLE_HOME = /u01/19c/oracle_base/oracle/db_home)
+      (SID_NAME = UATDB)
+    )
+  )
+
+# ==========================================
+# LISTENER BARU (PORT 1522)
+# ==========================================
+LISTENER_TDB01CS =
+  (DESCRIPTION =
+    (ADDRESS = (PROTOCOL = TCP)(HOST = nt19c3)(PORT = 1522))
+  )
+
+SID_LIST_LISTENER_TDB01CS =
+  (SID_LIST =
+    (SID_DESC =
+      (GLOBAL_DBNAME = TDB01)
+      (ORACLE_HOME = /u01/19c/oracle_base/oracle/db_home)
+      (SID_NAME = TDB01CS)
+    )
+    # Untuk Dataguard Standby
+    (SID_DESC =
+      (GLOBAL_DBNAME = TDB01CS)
+      (ORACLE_HOME = /u01/19c/oracle_base/oracle/db_home)
+      (SID_NAME = TDB01CS)
+    )
+  )

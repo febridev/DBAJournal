@@ -1,0 +1,47 @@
+# ==========================================
+# 1. Hostname dan Oracle SID Configuration
+# ==========================================
+host=$(hostname -s)
+if [ "$host" == "stpoc01" ]; then
+    ORA_SID=TDB01S1
+elif [ "$host" == "stpoc02" ]; then
+    ORA_SID=TDB01S2
+else
+    echo "Warning: Host does not match defined options. SID not set."
+fi
+
+export ORACLE_HOSTNAME=$(hostname -f) # Lebih baik menggunakan FQDN
+export ORACLE_SID=$ORA_SID
+export ORACLE_UNQNAME=prod
+
+# ==========================================
+# 2. Oracle Directories Configuration
+# ==========================================
+export ORACLE_BASE=/u01/19c/oracle_base
+export ORACLE_HOME=/u01/19c/oracle_base/oracle/db_home
+export ORACLE_TERM=xterm
+export TNS_ADMIN=$ORACLE_HOME/network/admin
+
+# ==========================================
+# 3. NLS Configuration
+# ==========================================
+export NLS_DATE_FORMAT="DD-MON-YYYY HH24:MI:SS"
+
+# ==========================================
+# 4. PATH Configuration (Aman dari celah "dot" current directory)
+# ==========================================
+export JAVA_HOME=$ORACLE_HOME/jdk # Gunakan JDK bawaan 19c
+export PATH=$ORACLE_HOME/bin:$HOME/bin:$JAVA_HOME/bin:$PATH:/usr/bin:/bin:/usr/local/bin
+
+# ==========================================
+# 5. Libraries & Classpath Configuration
+# ==========================================
+export LD_LIBRARY_PATH=$ORACLE_HOME/lib:$ORACLE_HOME/oracm/lib:/lib:/usr/lib:/usr/local/lib
+export CLASSPATH=$ORACLE_HOME/JRE:$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib:$ORACLE_HOME/network/jlib
+
+# ==========================================
+# 6. Temporary Directories (SANGAT KRITIKAL)
+# ==========================================
+export TMP=/tmp
+export TMPDIR=/tmp
+export TEMP=/tmp

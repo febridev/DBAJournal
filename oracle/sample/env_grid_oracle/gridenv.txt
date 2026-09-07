@@ -1,0 +1,53 @@
+# 1. Ambil hostname secara aman
+host=$(hostname -s 2>/dev/null)
+
+# 2. Validasi kecocokan host dengan standar POSIX dan double quotes
+if [ "$host" = "stpoc01" ]; then
+    ORA_SID=+ASM1
+elif [ "$host" = "stpoc03" ]; then
+    ORA_SID=+ASM2
+else
+    echo "ERROR: Host [$host] tidak dikenali dalam konfigurasi Grid RAC."
+    # Menggunakan return karena file ini biasanya di-source (. .gridenv)
+    # Ini mencegah sisa skrip dieksekusi tanpa menutup terminal user.
+    return 1 2>/dev/null || exit 1
+fi
+
+# 3. Ekspor variabel utama Grid
+ORACLE_SID=$ORA_SID
+export ORACLE_SID
+
+ORACLE_BASE=/u01/19c/grid_base
+export ORACLE_BASE
+
+ORACLE_HOME=/u01/19c/grid_home
+export ORACLE_HOME
+
+# 4. Tambahan LD_LIBRARY_PATH (Sangat direkomendasikan untuk DBA)
+LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+export LD_LIBRARY_PATH
+
+ORACLE_TERM=xterm
+export ORACLE_TERM
+
+JAVA_HOME=$ORACLE_HOME/jdk
+export JAVA_HOME
+
+TNS_ADMIN=$ORACLE_HOME/network/admin
+export TNS_ADMIN
+
+# 5. Penyusunan PATH yang bersih dan aman
+PATH=$JAVA_HOME/bin:$ORACLE_HOME/bin:$PATH
+export PATH
+
+# 6. Standar permission Oracle
+umask 022
+
+# 7. Konfirmasi opsional untuk kenyamanan DBA saat login
+echo "Grid Environment loaded successfully for $ORACLE_SID on $host."
+
+
+export TMP=/tmp
+export TMPDIR=/tmp
+export TEMP=/tmp
+

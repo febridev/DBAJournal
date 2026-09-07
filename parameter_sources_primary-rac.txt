@@ -1,0 +1,28 @@
+SQL> select dbid, name, db_unique_name, log_mode, open_mode, database_role
+from v$database;  2
+
+      DBID NAME       DB_UNIQUE_NAME       LOG_MODE     OPEN_MODE      DATABASE_ROLE
+---------- ---------- -------------------- ------------ -------------------- ----------------
+3856845023 DEMORH01   DEMORH01             NOARCHIVELOG READ WRITE             PRIMARY
+
+SQL> select thread#, instance, status, enabled from v$thread;
+
+   THREAD# INSTANCE                                          STATUS ENABLED
+---------- -------------------------------------------------------------------------------- ------ --------
+         1 DEMORH011                                         OPEN   PUBLIC
+         2 DEMORH012                                         OPEN   PUBLIC
+
+SQL> select group#, thread#, bytes/1024/1024 as size_mb, members, status
+from v$log
+order by thread#, group#;  2    3
+    GROUP#    THREAD#    SIZE_MB    MEMBERS STATUS        ---------- ---------- ---------- ---------- ----------------                                                                 1          1        200          2 CURRENT
+         2          1        200          2 INACTIVE               3          2        200          2 INACTIVE
+         4          2        200          2 CURRENT
+
+SQL> show parameter db_create_file_dest;                       
+show parameter db_create_online_log_dest_1;
+SQL>
+NAME                                 TYPE        VALUE    ------------------------------------ ----------- ------------------------------                                     db_create_file_dest                  string      +DATA
+
+
+
