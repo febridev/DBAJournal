@@ -1,0 +1,276 @@
+---
+# =============================================================================
+# Section 2 — OPatch upgrade + RU patch staging (as grid user)
+# =============================================================================
+
+- name: Check if OPatch was already backed up
+  stat:
+    path: "{{ grid_home }}/OPatch_bak"
+  register: opatch_bak
+
+- name: Backup existing OPatch dir as grid user
+  command: "mv {{ grid_home }}/OPatch {{ grid_home }}/OPatch_bak"
+  become_user: "{{ asm_user }}"
+  when: not opatch_bak.stat.exists
+
+- name: Extract new OPatch into GRID_HOME as grid user
+  unarchive:
+    src: "{{ opatch_zip }}"
+    dest: "{{ grid_home }}"
+    remote_src: true
+    owner: "{{ asm_user }}"
+    group: "{{ asm_group }}"
+  become_user: "{{ asm_user }}"
+  when: not opatch_bak.stat.exists
+
+- name: Create RU patch staging dir as grid user
+  file:
+    path: "{{ ru_patch_dir }}"
+    state: directory
+    owner: "{{ asm_user }}"
+    group: "{{ asm_group }}"
+    mode: '0775'
+
+- name: Extract RU patch zip as grid user
+  unarchive:
+    src: "{{ ru_patch_zip }}"
+    dest: "{{ ru_patch_dir }}"
+    remote_src: true
+    owner: "{{ asm_user }}"
+    group: "{{ asm_group }}"
+  become_user: "{{ asm_user }}"
+  args:
+    creates: "{{ ru_patch_dir }}/{{ ru_patch_id }}"
+
+- name: Check if RU is already applied in GRID_HOME
+  shell: >-
+    grep -qE '({{ ru_patch_id }}|39526364)'
+    {{ grid_home }}/.patch_storage/interim_inventory.txt 2>/dev/null
+  become_user: "{{ asm_user }}"
+  register: ru_applied_check
+  failed_when: false
+  changed_when: false
+
+# =============================================================================
+# Section 3 — Response file generation (gridsetup.rsp)
+# Keys must match the 19.0 response-file XSD schema exactly
+# =============================================================================
+
+- name: Ensure oraInventory parent dirs exist (owned by grid)
+  file:
+    path: "{{ inventory_loc | dirname }}"
+    state: directory
+    owner: "{{ asm_user }}"
+    group: "{{ asm_group }}"
+    mode: '0775'
+  loop:
+    - "{{ inventory_loc | dirname }}"
+    - "{{ inventory_loc }}"
+
+- name: Generate gridsetup.rsp for silent install
+  template:
+    src: gridsetup.rsp.j2
+    dest: /tmp/gridsetup.rsp
+    owner: "{{ asm_user }}"
+    group: "{{ asm_group }}"
+    mode: '0640'
+
+# =============================================================================
+# Section 4 — gridSetup.sh silent install
+# =============================================================================
+
+- name: Guard — check if GI is fully configured (olr.loc exists)
+  stat:
+    path: /etc/oracle/olr.loc
+  register: olr_file
+
+- name: Guard — check if software install already completed
+  stat:
+    path: "{{ inventory_loc }}/orainstRoot.sh"
+  register: swinstall_marker
+
+- name: Run gridSetup.sh WITH -applyRU (long-running)
+  shell: |
+    source /home/{{ asm_user }}/.grid19c_env
+    export CV_ASSUME_DISTID=OEL8
+    cd {{ grid_home }}
+    ./gridSetup.sh -applyRU {{ ru_patch_dir }}/{{ ru_patch_id }}
+      -silent -responseFile /tmp/gridsetup.rsp
+      -ignorePrereq -waitForCompletion
+  become_user: "{{ asm_user }}"
+  register: gridsetup_out
+  failed_when: gridsetup_out.rc not in [0, 6]
+  changed_when: true
+  when:
+    - not olr_file.stat.exists
+    - not swinstall_marker.stat.exists
+    - ru_applied_check.rc != 0
+  async: "{{ async_gridsetup_timeout }}"
+  poll: "{{ async_poll_interval }}"
+
+- name: Run gridSetup.sh without RU (already applied) (long-running)
+  shell: |
+    source /home/{{ asm_user }}/.grid19c_env
+    export CV_ASSUME_DISTID=OEL8
+    cd {{ grid_home }}
+    ./gridSetup.sh -silent -responseFile /tmp/gridsetup.rsp
+      -ignorePrereq -waitForCompletion
+  become_user: "{{ asm_user }}"
+  register: gridsetup_out_noru
+  failed_when: gridsetup_out_noru.rc not in [0, 6]
+  changed_when: true
+  when:
+    - not olr_file.stat.exists
+    - not swinstall_marker.stat.exists
+    - ru_applied_check.rc == 0
+  async: "{{ async_gridsetup_timeout }}"
+  poll: "{{ async_poll_interval }}"
+
+- name: Show last lines of gridSetup output
+  debug:
+    msg: >-
+      {{ (gridsetup_out.stdout_lines
+         if gridsetup_out.stdout_lines is defined
+         else (gridsetup_out_noru.stdout_lines
+               if gridsetup_out_noru.stdout_lines is defined
+               else ['(skipped)']))[-15:] }}
+
+# =============================================================================
+# Section 5 — Root scripts
+# =============================================================================
+
+- name: Run orainstRoot.sh (idempotent, re-run safe)
+  shell: "printf 'y\\n' | {{ inventory_loc }}/orainstRoot.sh"
+  register: orainst_out
+  changed_when: "'execution of the script is complete' in orainst_out.stdout"
+
+- name: Check if root.sh already run
+  stat:
+    path: "{{ grid_home }}/crs/install/root.sh.done"
+  register: rootsh_done_marker
+
+- name: Run root.sh (configures + starts Oracle Restart stack, long-running)
+  shell: >-
+    printf 'y\n' | {{ grid_home }}/root.sh
+    | tee {{ grid_home }}/crs/install/last_root_output.log
+    && touch {{ grid_home }}/crs/install/root.sh.done
+  register: rootsh_out
+  when: not rootsh_done_marker.stat.exists
+  async: "{{ async_rootsh_timeout }}"
+  poll: 20
+
+- name: Show last lines of root.sh output
+  debug:
+    msg: "{{ rootsh_out.stdout_lines[-15:] | default(['(task skipped)']) }}"
+  when: rootsh_out.stdout is defined
+
+# =============================================================================
+# Section 6 — Wait for CRS, then create DATA & FRA diskgroups
+# =============================================================================
+
+- name: Wait for Oracle Restart (OHASD) to be up after root.sh
+  shell: "{{ grid_home }}/bin/crsctl check has"
+  register: crs_up_check
+  until: crs_up_check.rc == 0
+  retries: "{{ async_crs_wait_max_retries }}"
+  delay: "{{ async_crs_wait_delay }}"
+  changed_when: false
+
+- name: Check if OCR diskgroup already configured
+  shell: |
+    source /home/{{ asm_user }}/.grid19c_env
+    asmcmd lsdg | grep -qw OCR
+  become_user: "{{ asm_user }}"
+  register: ocr_dg_check
+  failed_when: false
+  changed_when: false
+
+- name: Execute config tools (creates OCR DG + OCR/Voting files, long-running)
+  shell: |
+    source /home/{{ asm_user }}/.grid19c_env
+    cd {{ grid_home }}
+    ./gridSetup.sh -executeConfigTools
+      -responseFile /tmp/gridsetup.rsp -silent
+  become_user: "{{ asm_user }}"
+  register: cfgtools_out
+  failed_when: cfgtools_out.rc != 0
+  changed_when: true
+  when: ocr_dg_check.rc != 0
+  async: "{{ async_configtools_timeout }}"
+  poll: 30
+
+- name: Show last lines of executeConfigTools output
+  debug:
+    msg: >-
+      {{ cfgtools_out.stdout_lines[-20:]
+         | default(['(skipped - OCR DG already configured)']) }}
+  when: cfgtools_out.stdout_lines is defined
+
+- name: List current ASM diskgroups
+  shell: |
+    source /home/{{ asm_user }}/.grid19c_env
+    asmcmd lsdg
+  become_user: "{{ asm_user }}"
+  register: dg_list
+  changed_when: false
+
+- name: Create DATA diskgroup (external redundancy)
+  shell: >-
+    echo "CREATE DISKGROUP DATA EXTERNAL REDUNDANCY
+          DISK '/dev/oracleasm/asm-data'
+          ATTRIBUTE 'au_size'='{{ asm_diskgroup_au_size }}';"
+    | sqlplus -S / AS SYSASM
+  become_user: "{{ asm_user }}"
+  register: dg_data
+  failed_when: "'Diskgroup created' not in dg_data.stdout and 'ORA-' not in dg_data.stdout"
+  when: "'DATA' not in dg_list.stdout"
+
+- name: Create FRA diskgroup (external redundancy)
+  shell: >-
+    echo "CREATE DISKGROUP FRA EXTERNAL REDUNDANCY
+          DISK '/dev/oracleasm/asm-fra'
+          ATTRIBUTE 'au_size'='{{ asm_diskgroup_au_size }}';"
+    | sqlplus -S / AS SYSASM
+  become_user: "{{ asm_user }}"
+  register: dg_fra
+  failed_when: "'Diskgroup created' not in dg_fra.stdout and 'ORA-' not in dg_fra.stdout"
+  when: "'FRA' not in dg_list.stdout"
+
+# =============================================================================
+# Section 7 — Verification
+# =============================================================================
+
+- name: Capture CRS resource state
+  shell: "{{ grid_home }}/bin/crsctl stat res -t"
+  register: crs_state
+  changed_when: false
+
+- name: Verify all diskgroups ONLINE (OCR, DATA, FRA)
+  shell: |
+    source /home/{{ asm_user }}/.grid19c_env
+    asmcmd lsdg
+  become_user: "{{ asm_user }}"
+  register: dg_final
+  changed_when: false
+  failed_when: >-
+    'OCR' not in dg_final.stdout
+    or 'DATA' not in dg_final.stdout
+    or 'FRA' not in dg_final.stdout
+
+- name: Record GI OPatch patch level
+  shell: |
+    source /home/{{ asm_user }}/.grid19c_env
+    {{ grid_home }}/OPatch/opatch lspatches
+  become_user: "{{ asm_user }}"
+  register: gi_version
+  changed_when: false
+
+- name: Display final verification summary
+  debug:
+    msg:
+      - "=== CRS STATUS ==="
+      - "{{ crs_state.stdout_lines }}"
+      - "=== DISK GROUPS ==="
+      - "{{ dg_final.stdout_lines }}"
+      - "=== OPATCH LEVEL ==="
+      - "{{ gi_version.stdout_lines }}"

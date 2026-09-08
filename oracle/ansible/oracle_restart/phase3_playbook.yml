@@ -1,0 +1,267 @@
+---
+# =============================================================================
+# Oracle 19c Standalone (Oracle Restart / SIHA) - Phase 3: Database Software Install
+# Pure Ansible IaC - no standalone bash automation scripts
+# Includes: DB binary extraction, OPatch upgrade, RU+OJVM patches, runInstaller,
+# root.sh, OJVM post-install patch, verification
+# Usage (from Mac control node):
+#   ansible-playbook -i inventory.ini phase3_playbook.yml
+# Usage (on target VM, localhost):
+#   ansible-playbook -i /tmp/inventory_local.ini phase3_playbook.yml
+# =============================================================================
+- name: Oracle 19c Standalone - Phase 3 Oracle Database Software Install
+  hosts: ora_nodes
+  become: true
+  vars:
+    db_home: /u01/19c/oracle_base/oracle/db_home
+    db_base: /u01/19c/oracle_base
+    inventory_loc: /u01/app/oraInventory
+    db_user: oracle
+    db_group: oinstall
+    db_zip_src: /tmp/LINUX.X64_193000_db_home.zip
+    opatch_zip: /tmp/p6880880_190000_Linux-x86-64.zip
+    db_ru_zip: /tmp/p39062931_190000_Linux-x86-64.zip
+    db_ru_id: "39034528"            # DB RU 19.31 -> apply via -applyRU on runInstaller
+    ojvm_ru_id: "38906621"          # OJVM RU 19.31 -> apply via opatch post-install
+    ru_patch_dir: /tmp/oracle-patch
+    async_runinstaller_timeout: 5400
+    async_opatch_apply_timeout: 1800
+
+  tasks:
+    # ------------------------------------------------------------------
+    # SECTION 0 - Add ALL required OS groups to oracle user
+    # preinstall rpm only adds dba; we need oper,backupdba,dgdba,kmdba,racdba too
+    # ------------------------------------------------------------------
+    - name: "0.1 Add missing OS groups to oracle user"
+      command: "usermod -a -G dba,oper,backupdba,dgdba,kmdba,racdba {{ db_user }}"
+      changed_when: false
+
+    # ------------------------------------------------------------------
+    # SECTION 1 - Extract DB home binaries (as oracle user)
+    # ------------------------------------------------------------------
+    - name: "1.0 Ensure DB_HOME directory exists"
+      file:
+        path: "{{ db_home }}"
+        state: directory
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+        mode: '0775'
+
+    - name: "1.1 Force clean DB_HOME then extract from zip"
+      shell: |
+        rm -rf {{ db_home }}/* {{ db_home }}/.patch_storage
+        unzip -qo {{ db_zip_src }} -d {{ db_home }}
+      become_user: "{{ db_user }}"
+      register: db_extract
+      changed_when: "'extracted' in db_extract.stdout or db_extract.rc == 0"
+
+    # ------------------------------------------------------------------
+    # SECTION 2 - OPatch upgrade + RU staging (as oracle user)
+    # ------------------------------------------------------------------
+    - name: "2.0 Check if OPatch was already backed up"
+      stat:
+        path: "{{ db_home }}/OPatch_bak"
+      register: opatch_bak
+
+    - name: "2.1 Backup existing OPatch dir as oracle user"
+      command: "mv {{ db_home }}/OPatch {{ db_home }}/OPatch_bak"
+      become_user: "{{ db_user }}"
+      when: not opatch_bak.stat.exists
+
+    - name: "2.2 Extract new OPatch into DB_HOME as oracle user"
+      unarchive:
+        src: "{{ opatch_zip }}"
+        dest: "{{ db_home }}"
+        remote_src: true
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+      become_user: "{{ db_user }}"
+      when: not opatch_bak.stat.exists
+
+    - name: "2.3 Ensure RU staging dir as oracle user"
+      file:
+        path: "{{ ru_patch_dir }}"
+        state: directory
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+        mode: '0775'
+
+    - name: "2.4 Extract DB-RU patch ZIP as oracle user"
+      unarchive:
+        src: "{{ db_ru_zip }}"
+        dest: "{{ ru_patch_dir }}"
+        remote_src: true
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+      become_user: "{{ db_user }}"
+      args:
+        creates: "{{ ru_patch_dir }}/{{ db_ru_id }}"
+
+    # ------------------------------------------------------------------
+    # SECTION 3 - db_install.rsp generation (silent mode, SW-only)
+    # Keys per official template and 19.0 XSD schema
+    # ------------------------------------------------------------------
+    - name: "3.0 Ensure oraInventory parent dirs exist (owned by oracle)"
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+        mode: '0775'
+      loop:
+        - "{{ inventory_loc | dirname }}"
+        - "{{ inventory_loc }}"
+
+    - name: "3.1 Generate /tmp/db_install.rsp for silent install (SW-only)"
+      copy:
+        dest: /tmp/db_install.rsp
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+        mode: '0640'
+        content: |
+          oracle.install.responseFileVersion=/oracle/install/rspfmt_dbinstall_response_schema_v19.0.0
+          oracle.install.option=INSTALL_DB_SWONLY
+          UNIX_GROUP_NAME={{ db_group }}
+          INVENTORY_LOCATION={{ inventory_loc }}
+          ORACLE_HOME={{ db_home }}
+          ORACLE_BASE={{ db_base }}
+          oracle.install.db.InstallEdition=EE
+          oracle.install.db.OSDBA_GROUP=dba
+          oracle.install.db.OSOPER_GROUP=oper
+          oracle.install.db.OSBACKUPDBA_GROUP=backupdba
+          oracle.install.db.OSDGDBA_GROUP=dgdba
+          oracle.install.db.OSKMDBA_GROUP=kmdba
+          oracle.install.db.OSRACDBA_GROUP=racdba
+          oracle.install.db.CLUSTER_NODES=
+
+    # ------------------------------------------------------------------
+    # SECTION 4 - runInstaller silent (-applyRU; rc=6 = done but root.sh pending)
+    # GUARD: use central-inventory registration as the real "installed" signal.
+    # NOTE: root.sh exists straight out of the zip, so it is NOT a valid marker.
+    # ------------------------------------------------------------------
+    - name: "4.0 Guard: is DB_HOME already registered in central inventory?"
+      shell: "grep -q '{{ db_home }}' {{ inventory_loc }}/ContentsXML/inventory.xml 2>/dev/null"
+      register: dbhome_installed
+      failed_when: false
+      changed_when: false
+
+    - name: "4.1 Run runInstaller WITH -applyRU (long-running)"
+      shell: |
+        source /home/{{ db_user }}/.db19c_env
+        export CV_ASSUME_DISTID=OEL8
+        cd {{ db_home }}
+        ./runInstaller -silent -applyRU {{ ru_patch_dir }}/{{ db_ru_id }}
+          -responseFile /tmp/db_install.rsp
+          -ignorePrereq -waitForCompletion
+      become_user: "{{ db_user }}"
+      register: dbinstall_out
+      failed_when: dbinstall_out.rc not in [0, 6]
+      changed_when: true
+      when: dbhome_installed.rc != 0
+      async: "{{ async_runinstaller_timeout }}"
+      poll: 30
+
+    - name: "4.2 Show last lines of runInstaller output"
+      debug:
+        msg: "{{ dbinstall_out.stdout_lines[-15:] | default(['(skipped)']) }}"
+      when: dbinstall_out.stdout is defined
+
+    # ------------------------------------------------------------------
+    # SECTION 5 - root.sh for DB_HOME (as root, idempotent marker)
+    # ------------------------------------------------------------------
+    - name: "5.0 Check if DB root.sh already run"
+      stat:
+        path: "{{ db_home }}/install/root.sh.done"
+      register: dbrootsh_marker
+
+    - name: "5.1 Run DB_HOME root.sh"
+      shell: >-
+        printf 'y\n' | {{ db_home }}/root.sh
+        | tee {{ db_home }}/install/last_root_output.log
+        && touch {{ db_home }}/install/root.sh.done
+      register: dbrootsh_out
+      when: not dbrootsh_marker.stat.exists
+      async: 900
+      poll: 15
+
+    - name: "5.2 Show last lines of root.sh output"
+      debug:
+        msg: "{{ dbrootsh_out.stdout_lines[-15:] | default(['(task skipped)']) }}"
+      when: dbrootsh_out.stdout is defined
+
+    # ------------------------------------------------------------------
+    # SECTION 6 - OJVM RU post-install patch
+    # ------------------------------------------------------------------
+    - name: "6.0 Check if OJVM RU is already applied in DB_HOME"
+      shell: >-
+        grep -q '{{ ojvm_ru_id }}'
+        {{ db_home }}/.patch_storage/interim_inventory.txt 2>/dev/null
+      become_user: "{{ db_user }}"
+      register: ojvm_applied_check
+      failed_when: false
+      changed_when: false
+
+    - name: "6.1 Ensure OJVM patch staging dir"
+      file:
+        path: "{{ ru_patch_dir }}/{{ ojvm_ru_id }}"
+        state: directory
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+        mode: '0775'
+
+    - name: "6.2 Apply OJVM RU post-install via opatch (long-running)"
+      shell: |
+        source /home/{{ db_user }}/.db19c_env
+        cd {{ db_home }}
+        {{ db_home }}/OPatch/opatch apply -non_blocking
+          -invPtrLoc /etc/oraInst.loc
+          {{ ru_patch_dir }}/{{ ojvm_ru_id }}
+      become_user: "{{ db_user }}"
+      register: ojvm_result
+      failed_when: ojvm_result.rc != 0
+      changed_when: true
+      when: ojvm_applied_check.rc != 0
+      async: "{{ async_opatch_apply_timeout }}"
+      poll: 30
+
+    - name: "6.3 Show last lines of OJVM patch output"
+      debug:
+        msg: "{{ ojvm_result.stdout_lines[-15:] | default(['(skipped - OJVM RU already applied)']) }}"
+      when: ojvm_result.stdout_lines is defined
+
+    # ------------------------------------------------------------------
+    # SECTION 7 - Verification
+    # ------------------------------------------------------------------
+    - name: "7.1 Verify DB_HOME registered in central inventory"
+      shell: "grep -q '{{ db_home }}' {{ inventory_loc }}/ContentsXML/inventory.xml"
+      register: inv_check
+      failed_when: false
+      changed_when: false
+
+    - name: "7.2 DB OPatch level (DB RU + OJVM applied)"
+      shell: |
+        source /home/{{ db_user }}/.db19c_env
+        cd {{ db_home }}
+        {{ db_home }}/OPatch/opatch lspatches -invPtrLoc /etc/oraInst.loc
+      become_user: "{{ db_user }}"
+      register: db_patches
+      changed_when: false
+
+    - name: "7.3 sqlplus version"
+      shell: |
+        source /home/{{ db_user }}/.db19c_env
+        echo 'exit' | sqlplus -S /nolog | head -2
+      become_user: "{{ db_user }}"
+      register: sqlplus_ver
+      changed_when: false
+
+    - name: "7.4 Final verification summary"
+      debug:
+        msg:
+          - "=== INVENTORY REGISTERED ==="
+          - "{{ 'YES' if inv_check.rc == 0 else 'NO' }}"
+          - "=== DB OPATCH LEVEL ==="
+          - "{{ db_patches.stdout_lines }}"
+          - "=== SQLPLUS ==="
+          - "{{ sqlplus_ver.stdout_lines }}"
+      failed_when: inv_check.rc != 0 or (db_ru_id | string not in (db_patches.stdout | default(''))) or (ojvm_ru_id | string not in (db_patches.stdout | default('')))

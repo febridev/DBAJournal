@@ -1,0 +1,44 @@
+---
+# =============================================================================
+# Create environment profile files for grid and oracle users
+# Uses Jinja2 templates so values can vary per environment
+# =============================================================================
+
+- name: Ensure home directories exist
+  file:
+    path: "/home/{{ item.user }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "0755"
+  loop:
+    - { user: grid, owner: grid, group: oinstall }
+    - { user: oracle, owner: oracle, group: oinstall }
+
+- name: Deploy Grid environment profile (.grid19c_env)
+  template:
+    src: grid_env.j2
+    dest: "/home/grid/.grid19c_env"
+    owner: grid
+    group: oinstall
+    mode: "0644"
+
+- name: Source .grid19c_env in grid bash_profile
+  lineinfile:
+    path: /home/grid/.bash_profile
+    line: "source ~/.grid19c_env"
+    state: present
+
+- name: Deploy Oracle database environment profile (.db19c_env)
+  template:
+    src: db_env.j2
+    dest: "/home/oracle/.db19c_env"
+    owner: oracle
+    group: oinstall
+    mode: "0644"
+
+- name: Source .db19c_env in oracle bash_profile
+  lineinfile:
+    path: /home/oracle/.bash_profile
+    line: "source ~/.db19c_env"
+    state: present

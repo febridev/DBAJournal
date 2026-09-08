@@ -1,0 +1,126 @@
+---
+# =============================================================================
+# Phase 3 — runInstaller + root.sh + OJVM patch + verification
+# =============================================================================
+
+- name: Guard — is DB_HOME already registered in central inventory?
+  shell: "grep -q '{{ db_home }}' {{ inventory_loc }}/ContentsXML/inventory.xml 2>/dev/null"
+  register: dbhome_installed
+  failed_when: false
+  changed_when: false
+
+- name: Run runInstaller WITH -applyRU (long-running)
+  shell: |
+    source /home/{{ db_user }}/.db19c_env
+    export CV_ASSUME_DISTID=OEL8
+    cd {{ db_home }}
+    ./runInstaller -silent -applyRU {{ ru_patch_dir }}/{{ db_ru_id }}
+      -responseFile /tmp/db_install.rsp
+      -ignorePrereq -waitForCompletion
+  become_user: "{{ db_user }}"
+  register: dbinstall_out
+  failed_when: dbinstall_out.rc not in [0, 6]
+  changed_when: true
+  when: dbhome_installed.rc != 0
+  async: "{{ async_runinstaller_timeout }}"
+  poll: "{{ async_poll_interval }}"
+
+- name: Show last lines of runInstaller output
+  debug:
+    msg: "{{ dbinstall_out.stdout_lines[-15:] | default(['(skipped)']) }}"
+  when: dbinstall_out.stdout is defined
+
+- name: Check if DB root.sh already run
+  stat:
+    path: "{{ db_home }}/install/root.sh.done"
+  register: dbrootsh_marker
+
+- name: Run DB_HOME root.sh (idempotent, re-run safe)
+  shell: >-
+    printf 'y\n' | {{ db_home }}/root.sh
+    | tee {{ db_home }}/install/last_root_output.log
+    && touch {{ db_home }}/install/root.sh.done
+  register: dbrootsh_out
+  when: not dbrootsh_marker.stat.exists
+  async: "{{ async_rootsh_timeout }}"
+  poll: 15
+
+- name: Show last lines of root.sh output
+  debug:
+    msg: "{{ dbrootsh_out.stdout_lines[-15:] | default(['(task skipped)']) }}"
+  when: dbrootsh_out.stdout is defined
+
+# --- OJVM RU post-install patch ---
+
+- name: Check if OJVM RU is already applied in DB_HOME
+  shell: >-
+    grep -q '{{ ojvm_ru_id }}'
+    {{ db_home }}/.patch_storage/interim_inventory.txt 2>/dev/null
+  become_user: "{{ db_user }}"
+  register: ojvm_applied_check
+  failed_when: false
+  changed_when: false
+
+- name: Ensure OJVM patch staging dir
+  file:
+    path: "{{ ru_patch_dir }}/{{ ojvm_ru_id }}"
+    state: directory
+    owner: "{{ db_user }}"
+    group: "{{ db_group }}"
+    mode: '0775'
+
+- name: Apply OJVM RU post-install via opatch (long-running)
+  shell: |
+    source /home/{{ db_user }}/.db19c_env
+    cd {{ db_home }}
+    {{ db_home }}/OPatch/opatch apply -non_blocking
+      -invPtrLoc /etc/oraInst.loc
+      {{ ru_patch_dir }}/{{ ojvm_ru_id }}
+  become_user: "{{ db_user }}"
+  register: ojvm_result
+  failed_when: ojvm_result.rc != 0
+  changed_when: true
+  when: ojvm_applied_check.rc != 0
+  async: "{{ async_opatch_apply_timeout }}"
+  poll: 30
+
+- name: Show last lines of OJVM patch output
+  debug:
+    msg: "{{ ojvm_result.stdout_lines[-15:] | default(['(skipped - OJVM RU already applied)']) }}"
+  when: ojvm_result.stdout_lines is defined
+
+# --- Verification ---
+
+- name: Verify DB_HOME registered in central inventory
+  shell: "grep -q '{{ db_home }}' {{ inventory_loc }}/ContentsXML/inventory.xml"
+  register: inv_check
+  failed_when: false
+  changed_when: false
+
+- name: Record DB OPatch patch level
+  shell: |
+    source /home/{{ db_user }}/.db19c_env
+    cd {{ db_home }}
+    {{ db_home }}/OPatch/opatch lspatches -invPtrLoc /etc/oraInst.loc
+  become_user: "{{ db_user }}"
+  register: db_patches
+  changed_when: false
+
+- name: Capture sqlplus version
+  shell: |
+    source /home/{{ db_user }}/.db19c_env
+    echo 'exit' | sqlplus -S /nolog | head -2
+  become_user: "{{ db_user }}"
+  register: sqlplus_ver
+  changed_when: false
+
+- name: Display final verification summary
+  debug:
+    msg:
+      - "=== INVENTORY REGISTERED ==="
+      - "{{ 'YES' if inv_check.rc == 0 else 'NO' }}"
+      - "=== DB OPATCH LEVEL ==="
+      - "{{ db_patches.stdout_lines }}"
+      - "=== SQLPLUS ==="
+      - "{{ sqlplus_ver.stdout_lines }}"
+  failed_when: inv_check.rc != 0 or (db_ru_id | string not in (db_patches.stdout | default(''))) or (ojvm_ru_id | string not in (db_patches.stdout | default('')))

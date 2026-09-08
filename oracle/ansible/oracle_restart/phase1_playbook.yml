@@ -1,0 +1,207 @@
+---
+- name: Oracle 19c Standalone - Phase 1 Pre-Installation (Complete IaC)
+  hosts: ora_nodes
+  become: yes
+  vars:
+    ora_base: /u01
+    grid_home: /u01/19c/grid_home
+    grid_base: /u01/19c/grid_base
+    oracle_base: /u01/19c/oracle_base
+    oracle_home: /u01/19c/oracle_base/oracle/db_home
+  tasks:
+    - name: 1. Install prerequisite packages
+      dnf:
+        name:
+          - oracle-database-preinstall-19c
+          - gcc
+          - perl-core
+          - unzip
+          - binutils
+          - elfutils-libelf
+          - glibc
+          - ksh
+          - libaio
+          - libasan
+          - libgcc
+          - libstdc++
+          - make
+          - smartmontools
+          - sysstat
+        state: present
+
+    - name: 2. Disable SELinux permanently
+      lineinfile:
+        path: /etc/selinux/config
+        regexp: "^SELINUX="
+        line: SELINUX=disabled
+
+    - name: Disable SELinux immediately
+      command: setenforce 0
+      ignore_errors: yes
+
+    - name: Stop and disable firewalld
+      systemd:
+        name: firewalld
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: 3. Configure ASM Groups
+      group:
+        name: "{{ item.name }}"
+        gid: "{{ item.gid }}"
+        state: present
+      loop:
+        - { name: "oinstall", gid: 54330 }
+        - { name: "dba", gid: 54322 }
+        - { name: "asmdba", gid: 54327 }
+        - { name: "asmoper", gid: 54328 }
+        - { name: "asmadmin", gid: 54329 }
+        - { name: "racdba", gid: 54333 }
+      ignore_errors: yes
+
+    - name: Create oracle user if not exists
+      user:
+        name: oracle
+        uid: 54321
+        group: oinstall
+        groups: asmadmin,asmdba,dba
+        shell: /bin/bash
+        create_home: yes
+        state: present
+        password: "{{ 'Welcome123!' | password_hash('sha512') }}"
+
+    - name: Create grid user if not exists
+      user:
+        name: grid
+        uid: 54331
+        group: oinstall
+        groups: dba,asmdba,asmadmin,asmoper,racdba
+        shell: /bin/bash
+        create_home: yes
+        state: present
+        password: "{{ 'Welcome123!' | password_hash('sha512') }}"
+
+    - name: 4. Configure LVM Storage on /dev/sde for /u01
+      block:
+        - name: Create Physical Volume on /dev/sde
+          command: pvcreate -ff -y /dev/sde
+          args:
+            creates: /dev/sde
+
+        - name: Create Volume Group vg_u01
+          command: vgcreate vg_u01 /dev/sde
+          args:
+            creates: /dev/vg_u01
+
+        - name: Create Logical Volume lv_u01
+          command: lvcreate -y -l 100%FREE -n lv_u01 vg_u01
+          args:
+            creates: /dev/vg_u01/lv_u01
+
+        - name: Format LV with XFS filesystem
+          command: mkfs.xfs -f /dev/vg_u01/lv_u01
+
+        - name: Add /u01 to /etc/fstab if not present
+          lineinfile:
+            path: /etc/fstab
+            line: "/dev/mapper/vg_u01-lv_u01 /u01 xfs defaults 0 0"
+            state: present
+
+        - name: Ensure /u01 mount directory exists
+          file:
+            path: /u01
+            state: directory
+
+        - name: Ensure /u01 is mounted
+          command: mount /u01
+          register: mount_result
+          failed_when: mount_result.rc != 0 and 'already mounted' not in mount_result.stderr
+          changed_when: mount_result.rc == 0
+
+    - name: 5. Create Directory Structure for Oracle and Grid
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0775"
+      loop:
+        - "{{ grid_base }}"
+        - "{{ grid_home }}"
+        - "{{ oracle_base }}"
+        - "{{ oracle_home }}"
+
+    - name: Set ownership for /u01 and subdirectories
+      file:
+        path: "{{ item.path }}"
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        recurse: yes
+        mode: "0775"
+      loop:
+        - { path: "/u01", owner: "oracle", group: "oinstall" }
+        - { path: "{{ grid_base }}", owner: "grid", group: "oinstall" }
+        - { path: "{{ grid_home }}", owner: "grid", group: "oinstall" }
+
+    - name: 6. Configure Grid Environment Profile (.grid19c_env)
+      copy:
+        content: |
+          # Grid 19c Environment
+          ORACLE_SID=+ASM; export ORACLE_SID
+          ORACLE_BASE=/u01/19c/grid_base; export ORACLE_BASE
+          ORACLE_HOME=/u01/19c/grid_home; export ORACLE_HOME
+          ORACLE_TERM=xterm; export ORACLE_TERM
+          JAVA_HOME=/usr/bin/java; export JAVA_HOME
+          TNS_ADMIN=$ORACLE_HOME/network/admin; export TNS_ADMIN
+          PATH=.:${JAVA_HOME}/bin:${PATH}:$HOME/bin:$ORACLE_HOME/bin
+          PATH=${PATH}:/usr/bin:/bin:/usr/local/bin
+          export PATH
+          umask 022
+        dest: /home/grid/.grid19c_env
+        owner: grid
+        group: oinstall
+        mode: "0644"
+
+    - name: Source .grid19c_env in grid bash_profile
+      lineinfile:
+        path: /home/grid/.bash_profile
+        line: "source ~/.grid19c_env"
+        state: present
+
+    - name: 7. Configure Oracle Environment Profile (.db19c_env)
+      copy:
+        content: |
+          # Oracle 19c Environment
+          ORACLE_HOSTNAME=$HOSTNAME; export ORACLE_HOSTNAME
+          ORACLE_SID=dborcl; export ORACLE_SID
+          ORACLE_UNQNAME=dborcl; export ORACLE_UNQNAME
+          ORACLE_BASE=/u01/19c/oracle_base; export ORACLE_BASE
+          ORACLE_HOME=$ORACLE_BASE/oracle/db_home; export ORACLE_HOME
+          ORACLE_TERM=xterm; export ORACLE_TERM
+          JAVA_HOME=/usr/bin/java; export JAVA_HOME
+          TNS_ADMIN=$ORACLE_HOME/network/admin; export TNS_ADMIN
+          PATH=.:${JAVA_HOME}/bin:${PATH}:$HOME/bin:$ORACLE_HOME/bin
+          PATH=${PATH}:/usr/bin:/bin:/usr/local/bin
+          NLS_DATE_FORMAT="DD-MON-YYYY HH24:MI:SS"; export NLS_DATE_FORMAT
+          TEMP=/tmp; export TEMP
+          TMPDIR=$TEMP; export TMPDIR
+          export PATH
+        dest: /home/oracle/.db19c_env
+        owner: oracle
+        group: oinstall
+        mode: "0644"
+
+    - name: Source .db19c_env in oracle bash_profile
+      lineinfile:
+        path: /home/oracle/.bash_profile
+        line: "source ~/.db19c_env"
+        state: present
+
+    - name: 8. Unzip Grid Infrastructure Binaries as grid user
+      unarchive:
+        src: /tmp/LINUX.X64_193000_grid_home.zip
+        dest: "{{ grid_home }}"
+        remote_src: yes
+        owner: grid
+        group: oinstall
+      args:
+        creates: "{{ grid_home }}/gridSetup.sh"

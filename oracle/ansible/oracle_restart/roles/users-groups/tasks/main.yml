@@ -1,0 +1,40 @@
+---
+# =============================================================================
+# Create Oracle ASM groups, oracle user, grid user
+# =============================================================================
+
+- name: Configure ASM Groups
+  group:
+    name: "{{ item.name }}"
+    gid: "{{ item.gid }}"
+    state: present
+  loop:
+    - { name: oinstall, gid: 54330 }
+    - { name: dba, gid: 54322 }
+    - { name: asmdba, gid: 54327 }
+    - { name: asmoper, gid: 54328 }
+    - { name: asmadmin, gid: 54329 }
+    - { name: racdba, gid: 54333 }
+  ignore_errors: yes
+
+- name: Create oracle user
+  user:
+    name: oracle
+    uid: "{{ oracle_uid }}"
+    group: oinstall
+    groups: asmadmin,asmdba,dba
+    shell: "{{ env_shell }}"
+    create_home: yes
+    state: present
+    password: "{{ oracle_password | password_hash('sha512') }}"
+
+- name: Create grid user
+  user:
+    name: grid
+    uid: "{{ grid_uid }}"
+    group: oinstall
+    groups: dba,asmdba,asmadmin,asmoper,racdba
+    shell: "{{ env_shell }}"
+    create_home: yes
+    state: present
+    password: "{{ grid_password | password_hash('sha512') }}"

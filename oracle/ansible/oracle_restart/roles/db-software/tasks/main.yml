@@ -1,0 +1,59 @@
+---
+# =============================================================================
+# Phase 3 — Extract DB binaries + upgrade OPatch + stage RU/OJVM patches
+# =============================================================================
+
+- name: Force clean DB_HOME then extract from zip
+  shell: |
+    rm -rf {{ db_home }}/* {{ db_home }}/.patch_storage
+    unzip -qo {{ db_zip_src }} -d {{ db_home }}
+  become_user: "{{ db_user }}"
+  register: db_extract
+  changed_when: "'extracted' in db_extract.stdout or db_extract.rc == 0"
+
+# --------------------------------------------------------------------------
+# OPatch upgrade — guard against re-run via backup marker
+# --------------------------------------------------------------------------
+
+- name: Check if OPatch was already backed up
+  stat:
+    path: "{{ db_home }}/OPatch_bak"
+  register: opatch_bak
+
+- name: Backup existing OPatch dir as oracle user
+  command: "mv {{ db_home }}/OPatch {{ db_home }}/OPatch_bak"
+  become_user: "{{ db_user }}"
+  when: not opatch_bak.stat.exists
+
+- name: Extract new OPatch into DB_HOME as oracle user
+  unarchive:
+    src: "{{ opatch_zip }}"
+    dest: "{{ db_home }}"
+    remote_src: true
+    owner: "{{ db_user }}"
+    group: "{{ db_group }}"
+  become_user: "{{ db_user }}"
+  when: not opatch_bak.stat.exists
+
+# --------------------------------------------------------------------------
+# RU + OJVM patch staging
+# --------------------------------------------------------------------------
+
+- name: Ensure RU staging dir exists as oracle user
+  file:
+    path: "{{ ru_patch_dir }}"
+    state: directory
+    owner: "{{ db_user }}"
+    group: "{{ db_group }}"
+    mode: '0775'
+
+- name: Extract DB-RU patch ZIP as oracle user
+  unarchive:
+    src: "{{ db_ru_zip }}"
+    dest: "{{ ru_patch_dir }}"
+    remote_src: true
+    owner: "{{ db_user }}"
+    group: "{{ db_group }}"
+  become_user: "{{ db_user }}"
+  args:
+    creates: "{{ ru_patch_dir }}/{{ db_ru_id }}"

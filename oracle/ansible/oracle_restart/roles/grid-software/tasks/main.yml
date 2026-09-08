@@ -1,0 +1,14 @@
+---
+# =============================================================================
+# Unzip Grid Infrastructure binaries into grid_home
+# =============================================================================
+
+- name: Unzip Grid Infrastructure binaries as grid user
+  unarchive:
+    src: "{{ grid_zip_src }}"
+    dest: "{{ grid_home }}"
+    remote_src: yes
+    owner: grid
+    group: oinstall
+  args:
+    creates: "{{ grid_home }}/gridSetup.sh"

@@ -1,0 +1,11 @@
+# Grid 19c Environment Profile — managed by Ansible
+ORACLE_SID=+ASM; export ORACLE_SID
+ORACLE_BASE={{ grid_base }}; export ORACLE_BASE
+ORACLE_HOME={{ grid_home }}; export ORACLE_HOME
+ORACLE_TERM=xterm; export ORACLE_TERM
+JAVA_HOME=/usr/bin/java; export JAVA_HOME
+TNS_ADMIN=$ORACLE_HOME/network/admin; export TNS_ADMIN
+PATH=.:${JAVA_HOME}/bin:${PATH}:$HOME/bin:$ORACLE_HOME/bin
+PATH=${PATH}:/usr/bin:/bin:/usr/local/bin
+export PATH
+umask {{ env_umask }}

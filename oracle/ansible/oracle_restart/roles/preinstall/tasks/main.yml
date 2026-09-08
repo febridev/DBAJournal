@@ -1,0 +1,41 @@
+---
+# =============================================================================
+# Pre-installation tasks: packages, SELinux, firewall
+# =============================================================================
+
+- name: Install prerequisite packages
+  dnf:
+    name:
+      - "{{ asm_rpm_preinstall }}"
+      - gcc
+      - perl-core
+      - unzip
+      - binutils
+      - elfutils-libelf
+      - glibc
+      - ksh
+      - libaio
+      - libasan
+      - libgcc
+      - libstdc++
+      - make
+      - smartmontools
+      - sysstat
+    state: present
+
+- name: Disable SELinux permanently in config
+  lineinfile:
+    path: /etc/selinux/config
+    regexp: "^SELINUX="
+    line: SELINUX=disabled
+
+- name: Disable SELinux immediately (runtime)
+  command: setenforce 0
+  ignore_errors: yes
+
+- name: Stop and disable firewalld
+  systemd:
+    name: firewalld
+    state: stopped
+    enabled: no
+  ignore_errors: yes

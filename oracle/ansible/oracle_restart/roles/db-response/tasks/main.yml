@@ -1,0 +1,24 @@
+---
+# =============================================================================
+# Phase 3 — Generate /tmp/db_install.rsp from Jinja2 template
+# Keys match the official 19.0 response-file XSD schema exactly
+# =============================================================================
+
+- name: Ensure oraInventory parent dirs exist (owned by oracle)
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ db_user }}"
+    group: "{{ db_group }}"
+    mode: '0775'
+  loop:
+    - "{{ inventory_loc | dirname }}"
+    - "{{ inventory_loc }}"
+
+- name: Generate /tmp/db_install.rsp for silent install
+  template:
+    src: db_install.rsp.j2
+    dest: /tmp/db_install.rsp
+    owner: "{{ db_user }}"
+    group: "{{ db_group }}"
+    mode: '0640'

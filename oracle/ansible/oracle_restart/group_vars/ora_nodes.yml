@@ -1,0 +1,11 @@
+---
+# =============================================================================
+# ora_nodes — vars that may vary per node (e.g. multi-node RAC later)
+# Currently matches standalone config
+# =============================================================================
+
+# ASM disk layout for this node
+asm_disks:
+  - { dev: sdb, role: ocr }
+  - { dev: sdc, role: data }
+  - { dev: sdd, role: fra }

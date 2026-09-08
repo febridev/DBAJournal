@@ -1,0 +1,75 @@
+---
+# =============================================================================
+# Oracle 19c Installation — Shared Variables (all hosts)
+# Override per-host or per-phase by creating group_vars/o* files
+# =============================================================================
+
+# --- Paths ---
+ora_base: /u01
+grid_home: "{{ ora_base }}/19c/grid_home"
+grid_base: "{{ ora_base }}/19c/grid_base"
+oracle_base: "{{ ora_base }}/19c/oracle_base"
+oracle_home: "{{ oracle_base }}/oracle/db_home"
+inventory_loc: /u01/app/oraInventory
+
+# --- User / Group IDs ---
+oracle_uid: 54321
+grid_uid: 54331
+
+oracle_password: "Welcome123!"
+grid_password: "Welcome123!"
+asm_sys_password: "Welcome123#"
+asm_monitor_password: "Asm#Monitor123"
+
+# --- Disk / Storage ---
+lvm_disk: /dev/sde
+lvm_vg_name: vg_u01
+lvm_lv_name: lv_u01
+
+# ASM disks — each with a short role name for naming convenience
+# dev: OS block device basename (e.g. sdb); role: how it will appear in ASM names
+asm_disks:
+  - { dev: sdb, role: ocr }
+  - { dev: sdc, role: data }
+  - { dev: sdd, role: fra }
+
+# --- ASM defaults (used by grid-infrastructure & asm-storage roles) ---
+asm_user: grid
+asm_group: oinstall
+asm_admin_group: asmadmin
+asm_diskgroup_au_size: "4M"
+asm_rpm_preinstall: oracle-database-preinstall-19c
+
+# --- Database defaults ---
+oracle_sid: dborcl
+oracle_unqname: "{{ oracle_sid }}"
+oracle_hostname_variable: "$HOSTNAME"
+
+# --- Phase 3: DB home & software paths ---
+db_home: "{{ oracle_home }}"
+db_base: "{{ oracle_base }}"
+db_zip_src: /tmp/LINUX.X64_193000_db_home.zip
+
+# --- Phase 3: Patches ---
+opatch_zip: /tmp/p6880880_190000_Linux-x86-64.zip
+db_ru_zip: /tmp/p39062931_190000_Linux-x86-64.zip       # DB-RU bundle master ZIP
+db_ru_id: "39034528"                                      # DB RU 19.31 (applied via -applyRU)
+ojvm_ru_id: "38906621"                                    # OJVM RU 19.31 (applied via opatch post-install)
+
+# --- Environment profile settings ---
+env_shell: /bin/bash
+env_umask: "022"
+env_nls_date_format: "DD-MON-YYYY HH24:MI:SS"
+env_temp: /tmp
+
+# --- Phase 3: DB-specific timeouts ---
+async_runinstaller_timeout: 5400
+async_opatch_apply_timeout: 1800
+
+# --- Shared async timeouts for long-running install steps ---
+async_poll_interval: 30
+async_gridsetup_timeout: 3600
+async_rootsh_timeout: 1800
+async_configtools_timeout: 2400
+async_crs_wait_max_retries: 80
+async_crs_wait_delay: 15

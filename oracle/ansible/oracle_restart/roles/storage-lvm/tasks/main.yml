@@ -1,0 +1,49 @@
+---
+# =============================================================================
+# LVM storage setup on /dev/sde → /u01
+# =============================================================================
+
+- name: Create Physical Volume on {{ lvm_disk }}
+  command: pvcreate -ff -y {{ lvm_disk }}
+  args:
+    creates: "{{ lvm_disk }}"
+
+- name: Create Volume Group {{ lvm_vg_name }}
+  command: vgcreate {{ lvm_vg_name }} {{ lvm_disk }}
+  args:
+    creates: "/dev/{{ lvm_vg_name }}"
+
+- name: Create Logical Volume {{ lvm_lv_name }}
+  command: lvcreate -y -l 100%FREE -n "{{ lvm_lv_name }}" "{{ lvm_vg_name }}"
+  args:
+    creates: "/dev/{{ lvm_vg_name }}/{{ lvm_lv_name }}"
+
+- name: Format LV with XFS filesystem
+  command: mkfs.xfs -f "/dev/{{ lvm_vg_name }}/{{ lvm_lv_name }}"
+
+- name: Add {{ ora_base }} mount to /etc/fstab
+  lineinfile:
+    path: /etc/fstab
+    line: >-
+      /dev/mapper/{{ lvm_vg_name }}-{{ lvm_lv_name }}
+      {{ ora_base }} xfs defaults 0 0
+    state: present
+
+- name: Ensure {{ ora_base }} directory exists
+  file:
+    path: "{{ ora_base }}"
+    state: directory
+
+- name: Mount {{ ora_base }}
+  command: mount {{ ora_base }}
+  register: mount_result
+  failed_when: mount_result.rc != 0 and 'already mounted' not in mount_result.stderr
+  changed_when: mount_result.rc == 0
+
+- name: Set ownership for {{ ora_base }}
+  file:
+    path: "{{ ora_base }}"
+    owner: oracle
+    group: oinstall
+    recurse: yes
+    mode: "0775"

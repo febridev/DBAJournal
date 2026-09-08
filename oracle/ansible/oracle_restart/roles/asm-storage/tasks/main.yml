@@ -1,0 +1,73 @@
+---
+# =============================================================================
+# Section 1 — ASM Storage: header wipe + UDEV rules by ID_SCSI_SERIAL
+# =============================================================================
+
+# --- Detect existing ASM signatures (safety guard) ---
+- name: Detect existing ASM signatures on disk devices
+  shell: "blkid -o value -s TYPE /dev/{{ item.dev }} | grep -q 'Oracle ASMDISK'"
+  loop: "{{ asm_disks }}"
+  loop_control:
+    label: "/dev/{{ item.dev }}"
+  register: asm_sig_check
+  failed_when: false
+  changed_when: false
+
+# --- Wipe raw ASM disk headers if no existing signature ---
+- name: Wipe first 100MB of raw ASM disk headers
+  shell: |
+    dd if=/dev/zero of=/dev/{{ item.item.dev }} bs=1M count=100 conv=fsync status=none
+    touch /etc/asm_disk_wiped_{{ item.item.dev }}
+  loop: "{{ asm_sig_check.results }}"
+  loop_control:
+    label: "/dev/{{ item.item.dev }} (sig={{ 'ASMDISK' if item.rc == 0 else 'none' }})"
+  args:
+    creates: "/etc/asm_disk_wiped_{{ item.item.dev }}"
+  when: item.rc != 0  # skip dd if disk already carries an ASM signature
+
+# --- Collect real ID_SCSI_SERIAL for each ASM disk ---
+- name: Collect ID_SCSI_SERIAL for each ASM disk
+  shell: >-
+    udevadm info --query=property
+    --name=/dev/{{ item.dev }}
+    | awk -F= '/^ID_SCSI_SERIAL=/{print $2}'
+  loop: "{{ asm_disks }}"
+  loop_control:
+    label: "/dev/{{ item.dev }}"
+  register: asm_serial_raw
+  changed_when: false
+
+# --- Build facts mapping dev → serial ---
+- name: Build asm_rules fact from collected serials
+  set_fact:
+    asm_rules: >-
+      {{ asm_rules | default([])
+         + [ { 'dev': item.item.dev,
+               'role': item.item.role,
+               'serial': item.stdout | trim } ] }}
+  loop: "{{ asm_serial_raw.results }}"
+  loop_control:
+    label: "{{ item.item.dev }} -> {{ item.stdout | trim }}"
+
+# --- Write udev rules file ---
+- name: Write UDEV rules for Oracle ASM disks
+  template:
+    src: 99-oracle-asm.rules.j2
+    dest: /etc/udev/rules.d/99-oracle-asm.rules
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Reload udev rules and trigger
+  shell: udevadm control --reload-rules && udevadm trigger --action=add
+  changed_when: true
+
+# --- Verify symlinks ---
+- name: Verify ASM symlinks exist with correct ownership
+  shell: "ls -lL /dev/oracleasm/asm-{{ item.role }}"
+  loop: "{{ asm_disks }}"
+  loop_control:
+    label: "asm-{{ item.role }}"
+  register: asm_link_check
+  failed_when: "'grid' not in asm_link_check.stdout or 'asmadmin' not in asm_link_check.stdout"
+  changed_when: false

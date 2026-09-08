@@ -1,0 +1,21 @@
+---
+# =============================================================================
+# Section 0: Resource limits for grid user
+# (preinstall RPM only covers oracle user; grid needs its own)
+# =============================================================================
+
+- name: Configure /etc/security/limits for grid user
+  copy:
+    dest: /etc/security/limits.d/oracle-grid-preinstall-19c.conf
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      grid   soft    nofile  65536
+      grid   hard    nofile  65536
+      grid   soft    nproc   16384
+      grid   hard    nproc   16384
+      grid   soft    stack   10240
+      grid   hard    stack   32768
+      grid   soft    memlock 134217728
+      grid   hard    memlock 134217728

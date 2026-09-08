@@ -1,0 +1,31 @@
+---
+# =============================================================================
+# Create Oracle and Grid directory hierarchy
+# =============================================================================
+
+- name: Create Oracle/Grid directory structure
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0775"
+  loop:
+    - "{{ grid_base }}"
+    - "{{ grid_home }}"
+    - "{{ oracle_base }}"
+    - "{{ oracle_home }}"
+
+- name: Set ownership for {{ grid_base }}
+  file:
+    path: "{{ grid_base }}"
+    owner: grid
+    group: oinstall
+    recurse: yes
+    mode: "0775"
+
+- name: Set ownership for {{ grid_home }}
+  file:
+    path: "{{ grid_home }}"
+    owner: grid
+    group: oinstall
+    recurse: yes
+    mode: "0775"

@@ -1,0 +1,22 @@
+---
+# =============================================================================
+# Oracle 19c Standalone — Phase 3: Database Software Install (Software-only)
+# DB binaries + OPatch/RU patches + runInstaller + root.sh + OJVM patch + verify
+# Usage: ansible-playbook -i inventory.ini playbooks/phase3.yml
+# =============================================================================
+- name: Oracle 19c Standalone — Phase 3 (Database Software Install)
+  hosts: ora_nodes
+  become: true
+
+  pre_tasks:
+    - name: Ensure python3 is available
+      raw: test -e /usr/bin/python3 || (yum install -y python3)
+      changed_when: false
+      args:
+        executable: /bin/bash
+
+  roles:
+    - db-prereqs          # Section 0: add OS groups to oracle, ensure db_home
+    - db-software         # Sections 1-2: extract binaries, upgrade OPatch, stage patches
+    - db-response         # Section 3: generate db_install.rsp response file
+    - db-finalize         # Sections 4-6: runInstaller, root.sh, OJVM patch, verification

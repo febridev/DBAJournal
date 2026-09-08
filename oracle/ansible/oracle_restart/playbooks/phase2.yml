@@ -1,0 +1,21 @@
+---
+# =============================================================================
+# Oracle 19c Standalone — Phase 2: Grid Infrastructure Install
+# ASM storage + OPatch/RU patches + gridSetup.sh + root scripts + verification
+# Usage: ansible-playbook -i inventory.ini playbooks/phase2.yml
+# =============================================================================
+- name: Oracle 19c Standalone — Phase 2 (Grid Infrastructure)
+  hosts: ora_nodes
+  become: true
+
+  pre_tasks:
+    - name: Ensure python3 is available
+      raw: test -e /usr/bin/python3 || (yum install -y python3)
+      changed_when: false
+      args:
+        executable: /bin/bash
+
+  roles:
+    - limits-udev                  # Section 0: resource limits for grid user
+    - asm-storage                  # Section 1: ASM disks + udev rules
+    - grid-infrastructure          # Sections 2-7: patches, GI install, DGs, verify

@@ -1,0 +1,16 @@
+---
+# =============================================================================
+# Phase 3 — DB prerequisites: add OS groups to oracle user, create db_home
+# =============================================================================
+
+- name: Add missing OS groups to oracle user (dba,oper,backupdba,dgdba,kmdba,racdba)
+  command: "usermod -a -G dba,oper,backupdba,dgdba,kmdba,racdba {{ db_user }}"
+  changed_when: false
+
+- name: Ensure DB_HOME directory exists with correct ownership
+  file:
+    path: "{{ db_home }}"
+    state: directory
+    owner: "{{ db_user }}"
+    group: "{{ db_group }}"
+    mode: '0775'

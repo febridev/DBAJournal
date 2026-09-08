@@ -1,0 +1,24 @@
+---
+# =============================================================================
+# Oracle 19c Standalone — Phase 1: Pre-Installation & Bootstrap
+# Prerequisites + users/groups + LVM storage + env profiles + grid binaries
+# Usage: ansible-playbook -i inventory.ini playbooks/phase1.yml
+# =============================================================================
+- name: Oracle 19c Standalone — Phase 1 (Pre-Installation)
+  hosts: ora_nodes
+  become: yes
+
+  pre_tasks:
+    - name: Ensure python3 is available
+      raw: test -e /usr/bin/python3 || (yum install -y python3)
+      changed_when: false
+      args:
+        executable: /bin/bash
+
+  roles:
+    - preinstall
+    - users-groups
+    - storage-lvm
+    - create-directories
+    - oracle-environment
+    - grid-software
