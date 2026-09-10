@@ -1,0 +1,123 @@
+---
+# =============================================================================
+# Oracle 19c Standalone (Oracle Restart / SIHA) - Phase 4: DBCA Create Instance
+# Pure Ansible IaC - Creates database instance 'dbdemo' using ASM storage
+# =============================================================================
+- name: Oracle 19c Standalone - Phase 4 Database Instance Creation (DBCA)
+  hosts: ora_nodes
+  become: true
+  vars:
+    # Konfigurasi Environment & Path
+    db_home: /u01/19c/oracle_base/oracle/db_home
+    db_base: /u01/19c/oracle_base
+    db_name: dbdemo          # Nama Instance Baru
+    db_sid: dbdemo           # SID Baru
+    asm_data_dg: +DATA
+    asm_fra_dg: +FRA
+    
+    # Konfigurasi User OS
+    db_user: oracle
+    db_group: oinstall
+
+    # Konfigurasi Database (Sesuai .rsp terbaru Anda)
+    sys_password: "5tgb^YHN"
+    system_password: "5tgb^YHN" 
+    service_user_password: "database"
+    asm_sys_password: "Welcome123#"
+
+  tasks:
+    # ------------------------------------------------------------------
+    # SECTION 1 - Response File Preparation (Menghindari masalah permission /tmp)
+    # ------------------------------------------------------------------
+    - name: "1.1 Generate /home/oracle/dbca.rsp"
+      copy:
+        dest: "/home/oracle/dbca.rsp"
+        owner: "{{ db_user }}"
+        group: "{{ db_group }}"
+        mode: '0640'
+        content: |
+          responseFileVersion=/oracle/assistants/rspfmt_dbca_response_schema_v12.2.0
+          gdbName={{ db_name }}
+          sid={{ db_sid }}
+          asmSysPassword={{ asm_sys_password }}
+          databaseConfigType=SI
+          templateName={{ db_home }}/assistants/dbca/templates/General_Purpose.dbc
+          sysPassword={{ sys_password }}
+          systemPassword={{ system_password }}
+          serviceUserPassword={{ service_user_password }}
+          datafileJarLocation={ORACLE_HOME}/assistants/dbca/templates/
+          datafileDestination={{ asm_data_dg }}
+          recoveryAreaDestination={{ asm_fra_dg }}
+          storageType=ASM
+          diskGroupName={{ asm_data_dg }}
+          recoveryGroupName={{ asm_fra_dg }}
+          characterSet=AL32UTF8
+          nationalCharacterSet=AL16UTF16
+          registerWithDirService=false
+          skipListenerRegistration=true
+          databaseType=MULTIPURPOSE
+
+    # ------------------------------------------------------------------
+    # SECTION 2 - DBCA Execution (Menjalankan sebagai user oracle)
+    # ------------------------------------------------------------------
+    - name: "2.0 Guard: check if instance {{ db_sid }} already exists"
+      shell: "grep -q '{{ db_sid }}:' /etc/oratab"
+      register: db_exists
+      failed_when: false
+      changed_when: false
+
+    - name: "2.1 Run DBCA -silent -createDatabase"
+      shell: |
+        export ORACLE_HOME={{ db_home }}
+        export ORACLE_SID={{ db_sid }}
+        export ORACLE_BASE={{ db_base }}
+        export PATH={{ db_home }}/bin:$PATH
+        cd {{ db_home }}
+        ./bin/dbca -silent -createDatabase -responseFile /home/oracle/dbca.rsp > /home/oracle/dbca_install.log 2>&1
+      become_user: "{{ db_user }}"
+      when: db_exists.rc != 0
+      async: 3600     # Waktu tunggu hingga 1 jam (karena proses DBCA ke ASM cukup lama)
+      poll: 30        # Cek setiap 30 detik
+      register: dbca_result
+
+    # ------------------------------------------------------------------
+    # SECTION 3 - Register with Oracle Restart (srvctl)
+    # ------------------------------------------------------------------
+    - name: "3.1 Register database with srvctl"
+      shell: |
+        export ORACLE_HOME={{ db_home }}
+        export ORACLE_SID={{ db_sid }}
+        {{ db_home }}/bin/srvctl add database -d {{ db_sid }} -o {{ db_home }}
+      become_user: "{{ db_user }}"
+      ignore_errors: true
+
+    - name: "3.2 Ensure database is started via srvctl"
+      shell: |
+        export ORACLE_HOME={{ db_home }}
+        export ORACLE_SID={{ db_sid }}
+        {{ db_home }}/bin/srvctl start database -d {{ db_sid }}
+      become_user: "{{ db_user }}"
+      ignore_errors: true
+
+    # ------------------------------------------------------------------
+    # SECTION 4 - Final Verification
+    # ------------------------------------------------------------------
+    - name: "4.1 Verify DB process (PMON)"
+      shell: "ps -ef | grep pmon | grep -v grep | grep {{ db_sid }}"
+      register: pmon_check
+      changed_when: false
+
+    - name: "4.2 Verify connectivity via SQL*Plus"
+      shell: |
+        export ORACLE_HOME={{ db_home }}
+        export ORACLE_SID={{ db_sid }}
+        echo \"select instance_name, status from v\\$instance;\" | {{ db_home }}/bin/sqlplus -S / as sysdba
+      become_user: "{{ db_user }}"
+      register: db_status
+      changed_when: false
+
+    - name: "4.3 Final Summary"
+      debug:
+        msg: 
+          - "Instance {{ db_name }} creation result: {{ 'SUCCESS' if pmon_check.rc == 0 else 'FAILED' }}"
+          - "SQLPlus Status: {{ db_status.stdout }}"
